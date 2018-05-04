@@ -1,0 +1,17 @@
+<?php
+
+    include 'lateral_bar.php';
+
+#    echo '<h2>'.$accounts_item['id'].'</h2>';
+#    echo $accounts_item['name'];
+    
+    echo '<div id="main" class="main" style="overflow-x:auto;">';
+            echo $environments_table;
+
+#            foreach ($evolutions as $evolutions_item)
+#            {
+#                   print_r($evolutions_item);
+    #           print_r(array_values($evolutions_item)); 
+#            };
+    echo '</div>'
+?>

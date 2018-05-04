@@ -1,0 +1,11 @@
+<?php echo validation_errors(); ?>
+
+<?php
+    include 'lateral_bar.php';
+?>
+     
+<div id="main" class="main" style="overflow-x:auto;">
+    <?php 
+        echo $environments_table;
+    ?>
+</div>

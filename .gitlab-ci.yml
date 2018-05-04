@@ -1,0 +1,89 @@
+# This file is a template, and might need editing before it works on your project.
+image: docker-registry-default.cloudapps.atomic.go/openshift/openshift-cli:latest
+
+variables:
+  OPENSHIFT_SERVER: atomic01.atomic.go:8443
+  OPENSHIFT_DOMAIN: cloudapps.atomic.go
+  OBJETO: ./back-end/target/$CI_PROJECT_NAME.war
+  # Configure this variable in Secure Variables:
+  # OPENSHIFT_TOKEN: my.openshift.token
+
+stages:
+  - staging
+  - production
+
+.deploy: &deploy
+  before_script:
+    - oc login "$OPENSHIFT_SERVER" --token="$OPENSHIFT_TOKEN" --insecure-skip-tls-verify
+    - "oc project $CI_PROJECT_NAME 2> /dev/null || oc new-project $CI_PROJECT_NAME"
+    - "oc project $CI_PROJECT_NAME 2> /dev/null"
+  script:
+    # Criando a aplicação se não existir
+    - "export NEWAPP=1"
+    - "oc get services $APP -n $CI_PROJECT_NAME 2> /dev/null && NEWAPP=0 || oc new-app . --name=$APP -l app=$APP -i openshift/php-70-centos7 --allow-missing-images -n $CI_PROJECT_NAME"
+
+    # Variaveis que serão exportadas para o host
+    - "sleep 10 && oc set env bc/$APP OPENSHIFT_MYSQL_DB_HOST=$OPENSHIFT_MYSQL_DB_HOST OPENSHIFT_MYSQL_DB_USERNAME=$OPENSHIFT_MYSQL_DB_USERNAME OPENSHIFT_MYSQL_DB_PASSWORD=$OPENSHIFT_MYSQL_DB_PASSWORD  OPENSHIFT_MYSQL_DB_PORT=$OPENSHIFT_MYSQL_DB_PORT OPENSHIFT_APP_NAME=$OPENSHIFT_APP_NAME OPENSHIFT_APP_URL=$OPENSHIFT_APP_URL OPENSHIFT_APP_URI=$OPENSHIFT_APP_URI -n $CI_PROJECT_NAME"
+    
+    # Limites e Request de cpu e memoria
+    - "oc set resources dc/$APP --limits=cpu=$CPU_LIMIT,memory=$MEMORY_LIMIT --requests=cpu=$CPU_REQUEST,memory=$MEMORY_REQUEST -n $CI_PROJECT_NAME  2> /dev/null || echo 'Recurso já configurado' "
+
+    # Inicia o build - Verifica se é um novo app ou se um novo build
+    - "if [ $NEWAPP = 0 ]; then"
+    - "oc logs -f bc/$APP -n $CI_PROJECT_NAME"
+    - "oc start-build $APP --from-dir=. --follow -n $CI_PROJECT_NAME"
+    - "else"
+    - "oc start-build $APP --from-dir=. --follow -n $CI_PROJECT_NAME"  
+    - "fi"
+      
+    # Verificação/Criação das rotas      
+    - "oc get routes $APP -n $CI_PROJECT_NAME 2> /dev/null || oc expose service $APP --hostname=$APP_HOST -n $CI_PROJECT_NAME"
+
+staging:
+  <<: *deploy
+  stage: staging
+  variables:
+    APP: staging
+    APP_HOST: $CI_PROJECT_NAME-staging.$OPENSHIFT_DOMAIN
+    PROFILE_SPRING: homol
+    CPU_LIMIT: 800m
+    MEMORY_LIMIT: 512Mi
+    CPU_REQUEST: 600m
+    MEMORY_REQUEST: 512Mi
+    OPENSHIFT_MYSQL_DB_HOST: d-dbmysql02.pgj.rj.gov.br
+    OPENSHIFT_MYSQL_DB_USERNAME: vsdb_user
+    OPENSHIFT_MYSQL_DB_PASSWORD: vsdb_user_des
+    OPENSHIFT_MYSQL_DB_PORT: 3306
+    OPENSHIFT_APP_NAME: $CI_PROJECT_NAME
+    OPENSHIFT_APP_URI: http://$CI_PROJECT_NAME-staging.$OPENSHIFT_DOMAIN
+    OPENSHIFT_APP_URL: $CI_PROJECT_NAME-staging.$OPENSHIFT_DOMAIN
+  environment:
+    name: staging
+    url: http://$CI_PROJECT_NAME-staging.$OPENSHIFT_DOMAIN
+  only:
+    - master
+
+production:
+  <<: *deploy
+  stage: production
+  variables:
+    APP: production
+    APP_HOST: $CI_PROJECT_NAME.$OPENSHIFT_DOMAIN
+    PROFILE_SPRING: prod
+    CPU_LIMIT: 1000m
+    MEMORY_LIMIT: 1Gi
+    CPU_REQUEST: 1000m
+    MEMORY_REQUEST: 1Gi
+    OPENSHIFT_MYSQL_DB_HOST: d-dbmysql02.pgj.rj.gov.br
+    OPENSHIFT_MYSQL_DB_USERNAME: vsdb_user
+    OPENSHIFT_MYSQL_DB_PASSWORD: vsdb_user_des
+    OPENSHIFT_MYSQL_DB_PORT: 3306
+    OPENSHIFT_APP_URI: http://$CI_PROJECT_NAME-staging.$OPENSHIFT_DOMAIN
+    OPENSHIFT_APP_NAME: $CI_PROJECT_NAME
+    OPENSHIFT_APP_URL: $CI_PROJECT_NAME-staging.$OPENSHIFT_DOMAIN
+  when: manual
+  environment:
+    name: production
+    url: http://$CI_PROJECT_NAME.$OPENSHIFT_DOMAIN
+  only:
+    - master      

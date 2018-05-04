@@ -1,0 +1,8 @@
+<?php
+
+    include 'lateral_bar.php';
+
+    echo '<h2>'.$accounts_item['id'].'</h2>';
+    echo $accounts_item['name'];
+    echo '</br>';
+?>
